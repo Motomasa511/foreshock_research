@@ -8,8 +8,8 @@ from scipy.stats import weibull_min
 from scipy.optimize import fsolve
 
 df_inland = pd.read_csv('df_inland.csv', index_col=0, parse_dates=["time"])
-Mc_old = ??
-Mc_new = ??
+Mc_old = ???
+Mc_new = ???
 
 df_old = df_inland[(df_inland['datetime'] < pd.to_datetime('2016-04-01')) & (df_inland["magnitude"] >= Mc_old)]
 df_new = df_inland[(df_inland['datetime'] >= pd.to_datetime('2016-04-01')) & & (df_inland["magnitude"] >= Mc_new)]
