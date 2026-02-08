@@ -13,10 +13,10 @@ from scipy.optimize import minimize_scalar
 from scipy.special import gammaln
 from scipy.stats import gamma as gm
 
-mainshock_df_old = pd.read_csv(f'mainshock_df_old.csv', index_col=0, parse_dates=["datetime"])
-mainshock_df_new = pd.read_csv(f'mainshock_df_new.csv', index_col=0, parse_dates=["datetime"])
-df_old = pd.read_csv(f"df_inland_old.csv", index_col=0, parse_dates=["datetime"])
-df_new = pd.read_csv(f"df_inland_new.csv", index_col=0, parse_dates=["datetime"])
+mainshock_df_old = pd.read_csv(f'mainshock_df_old.csv', parse_dates=["datetime"])
+mainshock_df_new = pd.read_csv(f'mainshock_df_new.csv', parse_dates=["datetime"])
+df_old = pd.read_csv(f"df_inland_old.csv", parse_dates=["datetime"])
+df_new = pd.read_csv(f"df_inland_new.csv", parse_dates=["datetime"])
 
 mainshock_df_old = mainshock_df_old[(mainshock_df_old['datetime'] >= pd.to_datetime('1999-01-21'))]
 mainshock_df_new = mainshock_df_new[(mainshock_df_new['datetime'] >= pd.to_datetime('2017-04-21'))]
@@ -169,18 +169,33 @@ def simulate_event_counts_within_T_days(mainshock_df, nearby_event_dfs, T_days=2
 
     return mainshock_df
 
+if "foreshock3" in mainshock_df_old.columns:
+    print("already calculated, skip")
+else:
+    nearby_event_dfs_old = find_nearby_events(df_old, mainshock_df_old, distance_threshold_km=10.0, day_threshold=380)
+    nearby_event_dfs_new = find_nearby_events(df_new, mainshock_df_new, distance_threshold_km=10.0, day_threshold=380)
+    mainshock_df_old = estimate_background_parameters(mainshock_df_old, nearby_event_dfs_old)
+    mainshock_df_new = estimate_background_parameters(mainshock_df_new, nearby_event_dfs_new)
+    mainshock_df_old = simulate_event_counts_within_T_days(mainshock_df_old, nearby_event_dfs_old)
+    mainshock_df_new = simulate_event_counts_within_T_days(mainshock_df_new, nearby_event_dfs_new)
 
-nearby_event_dfs_old = find_nearby_events(df_old, mainshock_df_old, distance_threshold_km=10.0, day_threshold=380)
-nearby_event_dfs_new = find_nearby_events(df_new, mainshock_df_new, distance_threshold_km=10.0, day_threshold=380)
-mainshock_df_old = estimate_background_parameters(mainshock_df_old, nearby_event_dfs_old)
-mainshock_df_new = estimate_background_parameters(mainshock_df_new, nearby_event_dfs_new)
-mainshock_df_old = simulate_event_counts_within_T_days(mainshock_df_old, nearby_event_dfs_old)
-mainshock_df_new = simulate_event_counts_within_T_days(mainshock_df_new, nearby_event_dfs_new)
+    mainshock_df_old.to_csv(f"mainshock_df_old.csv", index=False)
+    mainshock_df_new.to_csv(f"mainshock_df_new.csv", index=False)
 
-mainshock_df_old.to_csv(f"mainshock_df_old.csv", index=False)
-mainshock_df_new.to_csv(f"mainshock_df_new.csv", index=False)
+# foeeshock occurrence rate
+print("oreshock occurrence rate : ")
 
+def occurrence_rate():
+    df_old = pd.read_csv("mainshock_df_old.csv")
+    df_new = pd.read_csv("mainshock_df_new.csv")
+    foreshock_list_old = df_old["foreshock3"]
+    foreshock_list_new = df_new["foreshock3"]
 
+    print(f"old : \n{np.sum(foreshock_list_old)}/{len(foreshock_list_old)} = {100*np.sum(foreshock_list_old)/len(foreshock_list_old):.3f}%\n")
+    print(f"new : \n{np.sum(foreshock_list_new)}/{len(foreshock_list_new)} = {100*np.sum(foreshock_list_new)/len(foreshock_list_new):.3f}%\n")
+    print(f"old+new : \n({np.sum(foreshock_list_old)}+{np.sum(foreshock_list_new)})/({len(foreshock_list_old)}+{len(foreshock_list_new)}) = {100*(np.sum(foreshock_list_old)+np.sum(foreshock_list_new))/(len(foreshock_list_old)+len(foreshock_list_new)):.3f}%")
+
+occurrence_rate()
 
 
 

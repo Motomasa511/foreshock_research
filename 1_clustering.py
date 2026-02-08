@@ -11,6 +11,8 @@ from scipy.optimize import curve_fit
 from scipy.stats import weibull_min
 from scipy.optimize import fsolve
 
+os.makedirs("1_clustering", exist_ok=True)
+
 def japan_map():
     shapefile_path = "ne_10m_admin_1_states_provinces/ne_10m_admin_1_states_provinces.shp"
     japan_admin1 = gpd.read_file(shapefile_path)
@@ -106,11 +108,11 @@ if os.path.exists("1_clustering/eta_pair_old.npz"):
 else:
     print("start calculating eta")
     eta_min_func(df_old, d_f=1.6, b=1.0, flag='old')
-    TR_distribbution(flag="old")
     print("old eta calculated")
     eta_min_func(df_new, d_f=1.6, b=1.0, flag='new')
-    TR_distribbution(flag="flag")
     print("new eta calculated")
+    TR_distribbution(flag="old")
+    TR_distribbution(flag="new")
 
 def eta_data_load(flag: str):
     data = np.load(f'1_clustering/eta_pair_{flag}.npz')
@@ -169,8 +171,6 @@ def fit_find_eta0(flag: str):
     plt.savefig(f"1_clustering/eta_dist_fit_{flag}.png", dpi=300, bbox_inches="tight")
 
     return eta_0
-eta_0_old = fit_find_eta0(flag='old')
-eta_0_new = fit_find_eta0(flag='new')
 
 # Union-Find (Disjoint Set Union)
 class UnionFind:
@@ -220,9 +220,14 @@ def clustering(flag: str, eta_0: float):
     with open(f'1_clustering/clusters_{flag}.pkl', "wb") as f:
         pickle.dump(clusters, f)
 
-clustering(flag='old', eta_0=eta_0_old)
-clustering(flag='new', eta_0=eta_0_new)
-print("clustering done")
+if os.path.exists("1_clustering/clusters_old.pkl"):
+    print('skip clustering')
+else:
+    eta_0_old = fit_find_eta0(flag='old')
+    eta_0_new = fit_find_eta0(flag='new')
+    clustering(flag='old', eta_0=eta_0_old)
+    clustering(flag='new', eta_0=eta_0_new)
+    print("clustering done")
 
 
 # export mainshocks & preceding events
@@ -314,8 +319,13 @@ def build_mainshock_and_before(flag: str, df, buffer_km=20):
 
     return mainshock_df, before_list
 
-mainshock_df_old, before_old = build_mainshock_and_before("old", df_old)
-mainshock_df_new, before_new = build_mainshock_and_before("new", df_new)
+if os.path.exists("1_clustering/before_list1_old.pkl"):
+    print('skip building before.pkl')
+    mainshock_df_old = pd.read_csv(f'mainshock_df_old.csv', parse_dates=["datetime"])
+    mainshock_df_new = pd.read_csv(f'mainshock_df_new.csv', parse_dates=["datetime"])
+else:
+    mainshock_df_old, before_old = build_mainshock_and_before("old", df_old)
+    mainshock_df_new, before_new = build_mainshock_and_before("new", df_new)
 
 def plot_earthquakes_on_japan_map(df, s, figname):
 
