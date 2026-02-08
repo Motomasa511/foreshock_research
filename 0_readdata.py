@@ -33,7 +33,7 @@ def parse_line(line):
         lon = float(line[33:36]) + float(line[36:40]) / (100*60)
         depth = float(line[44:49].replace(" ", "0")) / 100
         mag = float(line[52:54]) / 10
-        typ = int(line[60])
+        typ = int(line[60])   # type 1=normal eq, 5=lfe
         return dt, lat, lon, depth, mag, typ
     except:
         return None
@@ -56,7 +56,7 @@ def load_jma_catalog(zip_dir="JMAcatalog"):
                         if p:
                             records.append(p)
 
-    df = pd.DataFrame(records, columns=["time","latitude","longitude","depth","magnitude","type"])
+    df = pd.DataFrame(records, columns=["datetime","latitude","longitude","depth","magnitude","type"])
     return df
 
 # add cartesian coordinate
@@ -67,12 +67,9 @@ def add_xyz(df, lat_col="latitude", lon_col="longitude", depth_col="depth"):
     lat = np.radians(df[lat_col].values)
     lon = np.radians(df[lon_col].values)
 
-    x = R * np.cos(lat) * np.cos(lon)
-    y = R * np.cos(lat) * np.sin(lon)
-    z = R * np.sin(lat)
-
-    # 各行を [x,y,z] ベクトルにする
-    df["xyz"] = np.stack((x, y, z), axis=1).tolist()
+    df["x"] = R * np.cos(lat) * np.cos(lon)
+    df["y"] = R * np.cos(lat) * np.sin(lon)
+    df["z"] = R * np.sin(lat)
 
     return df
 
@@ -133,7 +130,6 @@ def extract_and_filter_events(df, buffer_km, area_threshold_km2=1500):
     return result_df
 
 df_inland = extract_and_filter_events(df_normal[df_normal['depth'] <= 40], buffer_km=50)
-df_inland.to_csv('df_inland.csv')
 
 print('clustering_area.png exported')
 
@@ -162,3 +158,48 @@ def plot_earthquakes_on_japan_map(df, s, figname):
 plot_earthquakes_on_japan_map(df_inland, s=0.1, figname="0_datafig/df_inland_events.png")
 
 print('clustering_events.png exported')
+
+
+# determin Mc
+def maxc_analysis(df, mag_col="magnitude", bin_width=0.1, flag=""):
+
+    mags = df[mag_col].dropna().values
+
+    mmin = np.floor(mags.min()) - 0.05
+    mmax = np.ceil(mags.max())
+    bins = np.arange(mmin, mmax + bin_width, bin_width)
+
+    counts, edges = np.histogram(mags, bins=bins)
+    centers = edges[:-1] + bin_width / 2
+
+    cumulative_counts = np.cumsum(counts[::-1])[::-1]
+
+    # Mc estimated by MAXC
+    idx_max = np.argmax(counts)
+    mc = centers[idx_max]
+
+    plt.figure()
+    plt.bar(centers, counts,
+        width=bin_width,
+        align='center',
+        alpha=0.6, label="Non-Cumulative")
+    plt.scatter(centers, cumulative_counts, label="Cumulative")
+    plt.axvline(mc, color='r', linestyle='--', linewidth=2,
+                label=f"Mc (MAXC) = {mc:.2f}")
+    plt.xlabel("Magnitude")
+    plt.ylabel("Event Count")
+    plt.yscale("log")
+    plt.title(f"Frequency-Magnitude Distribution ({flag})")
+    plt.legend()
+    plt.grid(alpha=0.3)
+    plt.savefig(f"0_datafig/gr_hist_{flag}.png")
+
+    return mc
+
+Mc_old = maxc_analysis(df_inland[(df_inland['datetime'] < pd.to_datetime('2016-04-01'))], flag="old")
+Mc_new = maxc_analysis(df_inland[(df_inland['datetime'] >= pd.to_datetime('2016-04-01'))], flag="new")
+
+print(f"Mc_old : {Mc_old:.2f}\nMc_new : {Mc_new:.2f}")
+
+df_inland[(df_inland['datetime'] < pd.to_datetime('2016-04-01')) & (df_inland["magnitude"] >= Mc_old)].to_csv('df_inland_old.csv')
+df_inland[(df_inland['datetime'] >= pd.to_datetime('2016-04-01')) & (df_inland["magnitude"] >= Mc_new)].to_csv('df_inland_new.csv')

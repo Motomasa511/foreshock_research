@@ -1,18 +1,26 @@
+import os
 import pandas as pd
 from datetime import datetime
 import numpy as np
 import matplotlib.pyplot as plt
 from numba import njit, prange
+import pickle
+import geopandas as gpd
+from shapely.geometry import Polygon, MultiPolygon, Point
 from scipy.optimize import curve_fit
 from scipy.stats import weibull_min
 from scipy.optimize import fsolve
 
-df_inland = pd.read_csv('df_inland.csv', index_col=0, parse_dates=["time"])
-Mc_old = ???
-Mc_new = ???
+def japan_map():
+    shapefile_path = "ne_10m_admin_1_states_provinces/ne_10m_admin_1_states_provinces.shp"
+    japan_admin1 = gpd.read_file(shapefile_path)
+    japan = japan_admin1[japan_admin1["admin"] == "Japan"]
+    return japan
 
-df_old = df_inland[(df_inland['datetime'] < pd.to_datetime('2016-04-01')) & (df_inland["magnitude"] >= Mc_old)]
-df_new = df_inland[(df_inland['datetime'] >= pd.to_datetime('2016-04-01')) & & (df_inland["magnitude"] >= Mc_new)]
+japan = japan_map()
+
+df_old = pd.read_csv('df_inland_old.csv', index_col=0, parse_dates=["datetime"])
+df_new = pd.read_csv('df_inland_new.csv', index_col=0, parse_dates=["datetime"])
 
 # Nearest-Neighborhood Clustering
 # calculate η_ij
@@ -57,7 +65,9 @@ def eta_min_for_j_numba(x, y, z, time_year, power_ten_mag, d_f):
 def eta_min_func(df1, d_f=1.6, b=1.0, flag=''):
     magnitude = df1['magnitude'].values.astype(np.float64)
     time_year = pd.to_datetime(df1['datetime']).values.astype(np.int64) / (1e9 * 365.25 * 24 * 3600)
-    x, y, z = np.stack(df1["xyz"].values).T
+    x = df1["x"].values
+    y = df1["y"].values
+    z = df1["z"].values
     power_ten_mag = 10.0 ** (-0.5 * b * magnitude)
 
     n = len(x)
@@ -71,19 +81,39 @@ def eta_min_func(df1, d_f=1.6, b=1.0, flag=''):
     j_valid = np.nonzero(valid)[0]
     pairs = np.stack((i_valid, j_valid), axis=1)
 
-    np.savez(f'eta_pair_{flag}.npz', pairs=pairs, eta_mins=eta_mins[valid])
-    np.savez(f'TR_{flag}.npz', T_mins=T_mins[valid], R_mins=R_mins[valid])
+    np.savez(f'1_clustering/eta_pair_{flag}.npz', pairs=pairs, eta_mins=eta_mins[valid])
+    np.savez(f'1_clustering/TR_{flag}.npz', T_mins=T_mins[valid], R_mins=R_mins[valid])
 
-if os.path.exists("eta_pair_old.npz"):
+def TR_distribbution(flag=""):
+    data = np.load(f"1_clustering/TR_{flag}.npz")
+    T, R = data['T_mins'], data['R_mins']
+    log_T = np.log10(T)
+    log_R = np.log10(R)
+
+    plt.figure()
+    plt.hist2d(log_T, log_R, bins=80, cmap='jet')
+    plt.xlabel('Log(T)', fontsize=12)
+    plt.ylabel('Log(R)', fontsize=12)
+    plt.title(f"re-scaled T & R ({flag})")
+    plt.colorbar(label='Count')
+
+    plt.ylim(-5,5)
+    plt.xlim(-10,0)
+    plt.savefig(f"1_clustering/TR_{flag}.png")
+
+if os.path.exists("1_clustering/eta_pair_old.npz"):
     print('skip calculating eta')
 else:
+    print("start calculating eta")
     eta_min_func(df_old, d_f=1.6, b=1.0, flag='old')
+    TR_distribbution(flag="old")
     print("old eta calculated")
     eta_min_func(df_new, d_f=1.6, b=1.0, flag='new')
+    TR_distribbution(flag="flag")
     print("new eta calculated")
 
 def eta_data_load(flag: str):
-    data = np.load(f'eta_pair_{flag}.npz')
+    data = np.load(f'1_clustering/eta_pair_{flag}.npz')
     return data['pairs'], data['eta_mins']
 
 # double Weibull distribution
@@ -136,7 +166,7 @@ def fit_find_eta0(flag: str):
     plt.legend()
     plt.grid(True)
     plt.text(x_crossing, 0.3, f'log(η_0)={x_crossing:.3f}')
-    plt.savefig(f"eta_dist_fit_{flag}.png", dpi=300, bbox_inches="tight")
+    plt.savefig(f"1_clustering/eta_dist_fit_{flag}.png", dpi=300, bbox_inches="tight")
 
     return eta_0
 eta_0_old = fit_find_eta0(flag='old')
@@ -187,13 +217,15 @@ def clustering(flag: str, eta_0: float):
     n = np.max(pairs) + 1
     clusters = cluster_pairs(filtered_pairs, n)
     
-    with open(f'clusters_{flag}.pkl', "wb") as f:
+    with open(f'1_clustering/clusters_{flag}.pkl', "wb") as f:
         pickle.dump(clusters, f)
 
 clustering(flag='old', eta_0=eta_0_old)
 clustering(flag='new', eta_0=eta_0_new)
 print("clustering done")
 
+
+# export mainshocks & preceding events
 def extract_and_filter_events(df, buffer_km, area_threshold_km2=1500):
 
     def remove_holes(geometry):
@@ -230,7 +262,7 @@ def extract_and_filter_events(df, buffer_km, area_threshold_km2=1500):
     ax.set_ylim(30, 47)
     plt.grid(True, linestyle="--", alpha=0.5)
     plt.tight_layout()
-    plt.savefig(f"0_datafig/clustering_area{buffer_km}.png", dpi=300, bbox_inches="tight")
+    plt.savefig(f"1_clustering/clustering_area{buffer_km}.png", dpi=300, bbox_inches="tight")
 
     # event filtering
     geometry = [Point(xy) for xy in zip(df["longitude"], df["latitude"])]
@@ -240,66 +272,86 @@ def extract_and_filter_events(df, buffer_km, area_threshold_km2=1500):
     result_df = filtered_gdf.drop(columns="geometry").reset_index(drop=True)
     return result_df
 
-def build_mainshock_and_before(dfs: dict, buffer_km=20):
-    all_mainshocks = []
-    all_befores = []
+def build_mainshock_and_before(flag: str, df, buffer_km=20):
+    with open(f"1_clustering/clusters_{flag}.pkl", "rb") as f:
+        clusters = pickle.load(f)
 
-    for flag, df_inland in dfs.items():
-        with open(f"clusters_{flag}.pkl", "rb") as f:
-            clusters = pickle.load(f)
+    candidate_mainshocks = []
+    candidate_befores = []
 
-        candidate_mainshocks = []
-        candidate_befores = []
+    for root, indices in clusters.items():
+        cluster_df = df.iloc[indices]
+        if cluster_df.empty:
+            continue
 
-        for root, indices in clusters.items():
-            cluster_df = df_inland.iloc[indices]
-            if cluster_df.empty:
-                continue
+        max_row = cluster_df.loc[cluster_df["magnitude"].idxmax()]
+        if max_row["magnitude"] < 4.0 or max_row["depth"] > 30:
+            continue
 
-            max_magnitude_row = cluster_df.loc[cluster_df["magnitude"].idxmax()]
-            if max_magnitude_row["magnitude"] < 4.0 or max_magnitude_row["depth"] > 30:
-                continue
+        candidate_mainshocks.append(max_row)
+        before_df = cluster_df[cluster_df["datetime"] < max_row["datetime"]].copy()
+        candidate_befores.append(before_df)
 
-            candidate_mainshocks.append(max_magnitude_row)
-            before_df = cluster_df[cluster_df["datetime"] < max_magnitude_row["datetime"]].copy()
-            candidate_befores.append(before_df)
+    mainshock_df = pd.DataFrame(candidate_mainshocks).reset_index(drop=True)
+    mainshock_df = extract_and_filter_events(mainshock_df, buffer_km=buffer_km).reset_index(drop=True)
 
-        mainshock_df = pd.DataFrame(candidate_mainshocks).reset_index(drop=True)
-        mainshock_df = extract_and_filter_events(mainshock_df, buffer_km=buffer_km).reset_index(drop=True)
+    before_list = []
+    for i, row in mainshock_df.iterrows():
+        for j, cand in enumerate(candidate_mainshocks):
+            if row.equals(cand):
+                before_list.append(candidate_befores[j])
+                break
 
-        before_list = []
-        for i, row in mainshock_df.iterrows():
-            for j, cand in enumerate(candidate_mainshocks):
-                if row.equals(cand):
-                    before_list.append(candidate_befores[j])
-                    break
+    mainshock_df["number"] = range(len(mainshock_df))
 
-        all_mainshocks.append(mainshock_df)
-        all_befores.extend(before_list)
+    with open(f"1_clustering/before_list1_{flag}.pkl", "wb") as f:
+        pickle.dump(before_list, f)
+    
+    foreshock_list = [len(df) > 0 for df in before_list]
 
-    merged_mainshock_df = pd.concat(all_mainshocks, ignore_index=True)
-    merged_mainshock_df["number"] = range(len(merged_mainshock_df))
+    mainshock_df['foreshock1'] = foreshock_list
+    mainshock_df.to_csv(f"mainshock_df_{flag}.csv", index=False)
 
-    merged_mainshock_df.to_csv("mainshock_df.csv", index=False)
-    with open("before_list1.pkl", "wb") as f:
-        pickle.dump(all_befores, f)
+    return mainshock_df, before_list
 
-    return merged_mainshock_df, all_befores
+mainshock_df_old, before_old = build_mainshock_and_before("old", df_old)
+mainshock_df_new, before_new = build_mainshock_and_before("new", df_new)
 
-mainshock_df, before_list = build_mainshock_and_before({"old": df_old, "new": df_new})
+def plot_earthquakes_on_japan_map(df, s, figname):
 
-def foreshock_check1():
-    mainshock_df = pd.read_csv('mainshock_df.csv', index_col=0, parse_dates=["datetime"])
-    with open("before_list1.pkl", "rb") as f:
-        before_event_list = pickle.load(f)
+    gdf_eq = gpd.GeoDataFrame(
+        df,
+        geometry=gpd.points_from_xy(df["longitude"], df["latitude"]),
+        crs="EPSG:4326"
+    )
 
-    foreshock_list = []
-    for i in range(len(mainshock_df)):
-        before_df = before_event_list[i]
-        foreshock_list.append(len(before_df)>0)
-    mainshock_df1 = mainshock_df.copy()
-    mainshock_df1['foreshock'] = foreshock_list
-    mainshock_df1.to_csv("mainshock_df_1.csv")
-    return mainshock_df
+    fig, ax = plt.subplots(figsize=(10, 12))
 
-foreshock_check1()
+    japan.plot(ax=ax, color="lightgray", edgecolor="black", alpha=0.6)
+    gdf_eq.plot(ax=ax, markersize=s, color="red", alpha=0.6)
+
+    plt.xlabel("Longitude")
+    plt.ylabel("Latitude")
+    plt.xlim(127, 147)
+    plt.ylim(30, 47)
+    plt.grid(True)
+    plt.tight_layout()
+    plt.savefig(figname, dpi=300, bbox_inches="tight")
+
+plot_earthquakes_on_japan_map(mainshock_df_old, s=5, figname="1_clustering/mainshock_old.png")
+plot_earthquakes_on_japan_map(mainshock_df_new, s=5, figname="1_clustering/mainshock_new.png")
+
+# foeeshock occurrence rate
+print("-------------\nforeshock occurrence rate : ")
+
+def occurrence_rate():
+    df_old = pd.read_csv("mainshock_df_old.csv")
+    df_new = pd.read_csv("mainshock_df_new.csv")
+    foreshock_list_old = df_old["foreshock1"]
+    foreshock_list_new = df_new["foreshock1"]
+
+    print(f"old : \n{np.sum(foreshock_list_old)}/{len(foreshock_list_old)} = {100*np.sum(foreshock_list_old)/len(foreshock_list_old):.3f}%\n")
+    print(f"new : \n{np.sum(foreshock_list_new)}/{len(foreshock_list_new)} = {100*np.sum(foreshock_list_new)/len(foreshock_list_new):.3f}%\n")
+    print(f"old+new : \n({np.sum(foreshock_list_old)}+{np.sum(foreshock_list_new)})/({len(foreshock_list_old)}+{len(foreshock_list_new)}) = {100*(np.sum(foreshock_list_old)+np.sum(foreshock_list_new))/(len(foreshock_list_old)+len(foreshock_list_new)):.3f}%")
+
+occurrence_rate()
