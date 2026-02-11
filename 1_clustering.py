@@ -277,7 +277,7 @@ def extract_and_filter_events(df, buffer_km, area_threshold_km2=1500):
     result_df = filtered_gdf.drop(columns="geometry").reset_index(drop=True)
     return result_df
 
-def build_mainshock_and_before(flag: str, df, buffer_km=20):
+def build_mainshock_and_before(flag: str, df, buffer_km=20, start_time=""):
     with open(f"1_clustering/clusters_{flag}.pkl", "rb") as f:
         clusters = pickle.load(f)
 
@@ -290,7 +290,7 @@ def build_mainshock_and_before(flag: str, df, buffer_km=20):
             continue
 
         max_row = cluster_df.loc[cluster_df["magnitude"].idxmax()]
-        if max_row["magnitude"] < 4.0 or max_row["depth"] > 30:
+        if max_row["magnitude"] < 4.0 or max_row["depth"] > 30 or max_row["datetime"] < pd.to_datetime(start_time):
             continue
 
         candidate_mainshocks.append(max_row)
@@ -314,7 +314,7 @@ def build_mainshock_and_before(flag: str, df, buffer_km=20):
     
     foreshock_list = [len(df) > 0 for df in before_list]
 
-    mainshock_df['foreshock1'] = foreshock_list
+    mainshock_df['TF_clustering'] = foreshock_list
     mainshock_df.to_csv(f"mainshock_df_{flag}.csv", index=False)
 
     return mainshock_df, before_list
@@ -324,8 +324,8 @@ if os.path.exists("1_clustering/before_list1_old.pkl"):
     mainshock_df_old = pd.read_csv(f'mainshock_df_old.csv', parse_dates=["datetime"])
     mainshock_df_new = pd.read_csv(f'mainshock_df_new.csv', parse_dates=["datetime"])
 else:
-    mainshock_df_old, before_old = build_mainshock_and_before("old", df_old)
-    mainshock_df_new, before_new = build_mainshock_and_before("new", df_new)
+    mainshock_df_old, before_old = build_mainshock_and_before("old", df_old, start_time="1999-01-21")
+    mainshock_df_new, before_new = build_mainshock_and_before("new", df_new, start_time="2017-04-21")
 
 def plot_earthquakes_on_japan_map(df, s, figname):
 
@@ -357,8 +357,8 @@ print("-------------\nforeshock occurrence rate : ")
 def occurrence_rate():
     df_old = pd.read_csv("mainshock_df_old.csv")
     df_new = pd.read_csv("mainshock_df_new.csv")
-    foreshock_list_old = df_old["foreshock1"]
-    foreshock_list_new = df_new["foreshock1"]
+    foreshock_list_old = df_old["TF_clustering"]
+    foreshock_list_new = df_new["TF_clustering"]
 
     print(f"old : \n{np.sum(foreshock_list_old)}/{len(foreshock_list_old)} = {100*np.sum(foreshock_list_old)/len(foreshock_list_old):.3f}%\n")
     print(f"new : \n{np.sum(foreshock_list_new)}/{len(foreshock_list_new)} = {100*np.sum(foreshock_list_new)/len(foreshock_list_new):.3f}%\n")

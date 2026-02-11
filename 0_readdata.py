@@ -184,8 +184,10 @@ def maxc_analysis(df, mag_col="magnitude", bin_width=0.1, flag=""):
         align='center',
         alpha=0.6, label="Non-Cumulative")
     plt.scatter(centers, cumulative_counts, label="Cumulative")
-    plt.axvline(mc, color='r', linestyle='--', linewidth=2,
+    plt.axvline(mc, color='pink', linestyle='--', linewidth=2,
                 label=f"Mc (MAXC) = {mc:.2f}")
+    plt.axvline(mc+0.2, color='r', linestyle='--', linewidth=2,
+                label=f"Mc (MAXC+0.2) = {mc+0.2:.2f}")
     plt.xlabel("Magnitude")
     plt.ylabel("Event Count")
     plt.yscale("log")
@@ -199,7 +201,7 @@ def maxc_analysis(df, mag_col="magnitude", bin_width=0.1, flag=""):
 Mc_old = maxc_analysis(df_inland[(df_inland['datetime'] < pd.to_datetime('2016-04-01'))], flag="old")
 Mc_new = maxc_analysis(df_inland[(df_inland['datetime'] >= pd.to_datetime('2016-04-01'))], flag="new")
 
-print(f"Mc_old : {Mc_old:.2f}\nMc_new : {Mc_new:.2f}")
+print(f"Mc_old : {Mc_old:.2f}+0.2\nMc_new : {Mc_new:.2f}+0.2")
 
-df_inland[(df_inland['datetime'] < pd.to_datetime('2016-04-01')) & (df_inland["magnitude"] >= Mc_old)].to_csv('df_inland_old.csv')
-df_inland[(df_inland['datetime'] >= pd.to_datetime('2016-04-01')) & (df_inland["magnitude"] >= Mc_new)].to_csv('df_inland_new.csv')
+df_inland[(df_inland['datetime'] < pd.to_datetime('2016-04-01')) & (df_inland["magnitude"] >= Mc_old+0.2)].to_csv('df_inland_old.csv')
+df_inland[(df_inland['datetime'] >= pd.to_datetime('2016-04-01')) & (df_inland["magnitude"] >= Mc_new+0.2)].to_csv('df_inland_new.csv')

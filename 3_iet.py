@@ -15,11 +15,9 @@ from scipy.stats import gamma as gm
 
 mainshock_df_old = pd.read_csv(f'mainshock_df_old.csv', parse_dates=["datetime"])
 mainshock_df_new = pd.read_csv(f'mainshock_df_new.csv', parse_dates=["datetime"])
-df_old = pd.read_csv(f"df_inland_old.csv", parse_dates=["datetime"])
-df_new = pd.read_csv(f"df_inland_new.csv", parse_dates=["datetime"])
 
-mainshock_df_old = mainshock_df_old[(mainshock_df_old['datetime'] >= pd.to_datetime('1999-01-21'))]
-mainshock_df_new = mainshock_df_new[(mainshock_df_new['datetime'] >= pd.to_datetime('2017-04-21'))]
+df_old = pd.read_csv("df_inland_old.csv", parse_dates=["datetime"])
+df_new = pd.read_csv("df_inland_new.csv", parse_dates=["datetime"])
 
 print('df set done')
 
@@ -162,14 +160,14 @@ def simulate_event_counts_within_T_days(mainshock_df, nearby_event_dfs, T_days=2
         foreshock_99.append(rate<0.01)
 
     mainshock_df = mainshock_df.copy()
-    mainshock_df[f"{T_days}days_mu"] = mu_list
-    mainshock_df[f"{T_days}days_gamma"] = gamma_list
-    mainshock_df["foreshock_rate"] = foreshock_rate
-    mainshock_df["foreshock3"] = foreshock_99
+    mainshock_df["iet_mu"] = mu_list
+    mainshock_df["iet_gamma"] = gamma_list
+    mainshock_df["iet_rate"] = foreshock_rate
+    mainshock_df["TF_iet"] = foreshock_99
 
     return mainshock_df
 
-if "foreshock3" in mainshock_df_old.columns:
+if "TF_iet" in mainshock_df_old.columns:
     print("already calculated, skip")
 else:
     nearby_event_dfs_old = find_nearby_events(df_old, mainshock_df_old, distance_threshold_km=10.0, day_threshold=380)
@@ -188,8 +186,8 @@ print("oreshock occurrence rate : ")
 def occurrence_rate():
     df_old = pd.read_csv("mainshock_df_old.csv")
     df_new = pd.read_csv("mainshock_df_new.csv")
-    foreshock_list_old = df_old["foreshock3"]
-    foreshock_list_new = df_new["foreshock3"]
+    foreshock_list_old = df_old["TF_iet"]
+    foreshock_list_new = df_new["TF_iet"]
 
     print(f"old : \n{np.sum(foreshock_list_old)}/{len(foreshock_list_old)} = {100*np.sum(foreshock_list_old)/len(foreshock_list_old):.3f}%\n")
     print(f"new : \n{np.sum(foreshock_list_new)}/{len(foreshock_list_new)} = {100*np.sum(foreshock_list_new)/len(foreshock_list_new):.3f}%\n")

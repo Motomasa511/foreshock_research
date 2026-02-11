@@ -31,13 +31,19 @@ def space_time_window(distance_threshold_km=10.0, day_threshold=20, flag=""):
         foreshock_flags.append(count > 0)
         foreshock_counts.append(count)
 
-    mainshock_df["foreshock2"] = foreshock_flags
-    mainshock_df["foreshock2 count"] = foreshock_counts
+    mainshock_df["TF_stw"] = foreshock_flags
+    mainshock_df["TF_stw count"] = foreshock_counts
 
     mainshock_df.to_csv(f"mainshock_df_{flag}.csv", index=False)
 
-space_time_window(flag="old")
-space_time_window(flag="new")
+mainshock_df_old = pd.read_csv(f'mainshock_df_old.csv', parse_dates=["datetime"])
+mainshock_df_new = pd.read_csv(f'mainshock_df_new.csv', parse_dates=["datetime"])
+
+if "TF_stw" in mainshock_df_old.columns:
+    print("already calculated, skip")
+else:
+    space_time_window(flag="old")
+    space_time_window(flag="new")
 
 # foeeshock occurrence rate
 print("oreshock occurrence rate : ")
@@ -45,8 +51,8 @@ print("oreshock occurrence rate : ")
 def occurrence_rate():
     df_old = pd.read_csv("mainshock_df_old.csv")
     df_new = pd.read_csv("mainshock_df_new.csv")
-    foreshock_list_old = df_old["foreshock2"]
-    foreshock_list_new = df_new["foreshock2"]
+    foreshock_list_old = df_old["TF_stw"]
+    foreshock_list_new = df_new["TF_stw"]
 
     print(f"old : \n{np.sum(foreshock_list_old)}/{len(foreshock_list_old)} = {100*np.sum(foreshock_list_old)/len(foreshock_list_old):.3f}%\n")
     print(f"new : \n{np.sum(foreshock_list_new)}/{len(foreshock_list_new)} = {100*np.sum(foreshock_list_new)/len(foreshock_list_new):.3f}%\n")
