@@ -18,8 +18,8 @@ c     Ogata, Y., Matsu'ura S.R., Katsura, K. (1993). submitted to
 c                Geophys. Res. Letters.
 c-----------------------------------------------------------------------
 c      implicit real * 8 (a-h,o-z)
-c      parameter(ldata=17777, npara=5)
-      parameter(ldata=17777)
+c      parameter(ldata=50000, npara=5)
+      parameter(ldata=50000)
       common/xyod/xx(ldata),xmg(ldata),xmag0
 c      common/param/xini(npara),n
       common /range/tstart,ntstar
@@ -63,7 +63,7 @@ c
 c       Reading parameters
 c
       implicit real * 8 (a-h,o-z)
-      parameter(ldata=17777, npara=5)
+      parameter(ldata=50000, npara=5)
       common/param/xini(npara),n
       dimension z(ldata),amg(ldata)
       character*80 hypodata
@@ -72,7 +72,7 @@ c
       common /fukasa/dep(ldata)
       common t,nn,mm,iappr,nfunct
       common /range/tstart,ntstar
-      open(unit=1,file='etas.open')
+      open(unit=1,file='4_etas/etas.open')
 c     open(unit=1,file='./etaspc.open')
 c     open(unit=1,file='siminit.dat')
 *     read(1,112) hypodata
@@ -109,7 +109,7 @@ c
 c     if(dep(i).lt.depx1.or.dep(i).gt.depx2) go to 10
       if(z(i).lt.zts.or.z(i).gt.zte) go to 10
       nn=nn+1
-      write(6,1002) nn,i,amg(i),z(i),dep(i)
+c      write(6,1002) nn,i,amg(i),z(i),dep(i)
  1002 format(2i7,4f12.5,f5.0)
       if(z(i).lt.tstart) ntstar=nn
       xx(nn)=z(i)-zts
@@ -134,11 +134,11 @@ c
 c            Reading hypocenter data
 c
       implicit real * 8 (a-h,o-z)
-      parameter(ldata=17777, npara=5)
+      parameter(ldata=50000, npara=5)
       dimension z(ldata),amg(ldata),dep(ldata),fmt(20)
       character*80 hypodata
 *     open(unit=10,file=hypodata)
-      open(unit=10,file='work.etas')
+      open(unit=10,file='4_etas/work.etas')
       read(10,1001) fmt
  1001 format(20a4)
       write(6,1001) fmt
@@ -154,7 +154,7 @@ c
 c***********************************************************************
       subroutine finout
       implicit real * 8 (a-h,o-z)
-      parameter(ldata=17777,npara=5)
+      parameter(ldata=50000,npara=5)
       external func4,func9
       common/xyod/xx(ldata),xmg(ldata),xmag0
       common t,nn,mm,iappr,nfunct
@@ -415,7 +415,7 @@ c
    20 x1(i) = x(i) + ram2*h(i)
       call  funct( k,x1,e2,g,ig )
 c     if(ipr.ge.7)  write(6,2)  ram2,e2
-      if(ipr.ge.7)  write(6,8)  e2,(x1(i)**2,i=1,k)
+c      if(1.ge.7)  write(6,8)  e2,(x1(i)**2,i=1,k)
     8 format(' -ll=',d13.5,1x,5d12.5)
 c
       if( ig .eq. 1 )  go to  50
@@ -426,7 +426,7 @@ c
       call  funct( k,x1,e3,g,ig )
       if( ig.eq.1 )  go to  500
 c     if( ipr.ge.7 )  write(6,3)  ram3,e3
-      if(ipr.ge.7)  write(6,8)  e3,(x1(i)**2,i=1,k)
+c      if(ipr.ge.7)  write(6,8)  e3,(x1(i)**2,i=1,k)
       if( e3 .gt. e2 )  go to 70
       ram1 = ram2
       ram2 = ram3
@@ -442,7 +442,7 @@ c
    60 x1(i) = x(i) + ram2*h(i)
       call  funct( k,x1,e2,g,ig )
 c     if(ipr.ge.7)  write(6,4)  ram2,e2
-      if(ipr.ge.7)  write(6,8)  e2,(x1(i)**2,i=1,k)
+c      if(ipr.ge.7)  write(6,8)  e2,(x1(i)**2,i=1,k)
       if( e2.gt.e1 )  go to 50
 c
    70 assign 80 to return
@@ -452,7 +452,7 @@ c
    90 x1(i) = x(i) + ram*h(i)
       call  funct( k,x1,ee,g,ig )
 c     if(ipr.ge.7)  write(6,5)  ram,ee
-      if(ipr.ge.7)  write(6,8)  ee,(x1(i)**2,i=1,k)
+c      if(ipr.ge.7)  write(6,8)  ee,(x1(i)**2,i=1,k)
 c
       ifg = 0
       assign  300 to  sub
@@ -485,7 +485,7 @@ c
   140 x1(i) = x(i) + ram*h(i)
       call  funct( k,x1,ee,g,ig )
 c     if( ipr.ge.7 )  write(6,6)  ram,ee
-      if(ipr.ge.7)  write(6,8)  ee,(x1(i)**2,i=1,k)
+c      if(ipr.ge.7)  write(6,8)  ee,(x1(i)**2,i=1,k)
       assign 200 to sub
       ifg = ifg+1
       ifg = 0
@@ -527,7 +527,7 @@ c
   520 x1(i) = x(i) + ram*h(i)
       call  funct( k,x1,e3,g,ig )
 c     if( ipr.ge.7 )  write(6,7)  ram,e3
-      if(ipr.ge.7)  write(6,8)  e3,(x1(i)**2,i=1,k)
+c      if(ipr.ge.7)  write(6,8)  e3,(x1(i)**2,i=1,k)
       if( ig.eq.1 )  go to 540
       if( e3.gt.e2 )  go to 530
       ram1 = ram2
@@ -561,7 +561,7 @@ c     at the date of 26th oct. 1981.
 c     -----this is succeeded at 23 dec.1983-----
 c----------------------------------------------------------------------
       implicit real * 8 (a-h,o-z)
-      parameter(ldata=17777, npara=5)
+      parameter(ldata=50000, npara=5)
       common/xyod/xx(ldata),xmg(ldata),xmag0
       common t,nn,mm,iappr
       common /ddd/fff,aic2
@@ -752,7 +752,7 @@ c     for a3 did not fit well. this subrourine has overcomed this
 c     by making use of the direct diffrerential of lamdai: see pi#(.).
 c-----------------------------------------------------------------------
       implicit real * 8 (a-h,o-z)
-      parameter(ldata=17777, npara=5)
+      parameter(ldata=50000, npara=5)
       common/xyod/xx(ldata),xmg(ldata),xmag0
       common t,nn,mm,iappr
       common /ddd/fff,aic2

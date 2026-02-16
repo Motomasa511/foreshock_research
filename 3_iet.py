@@ -69,7 +69,7 @@ def gamma_fit(data):
     mu = g_max / mean
     return g_max, mu
 
-def estimate_background_parameters(mainshock_df, nearby_event_dfs, min_days=28, max_days=388):
+def estimate_background_parameters(mainshock_df, nearby_event_dfs, min_days=20, max_days=380):
     
     mu_list = []
     gamma_list = []
@@ -120,7 +120,7 @@ def estimate_gamma_moments(data):
     scale = var / mean
     return shape, 1/scale
 
-def simulate_event_counts_within_T_days(mainshock_df, nearby_event_dfs, T_days=28, n_trials=50000):
+def simulate_event_counts_within_T_days(mainshock_df, nearby_event_dfs, T_days=20, n_trials=50000):
 
     foreshock_99 = []
     foreshock_rate = []
@@ -167,7 +167,8 @@ def simulate_event_counts_within_T_days(mainshock_df, nearby_event_dfs, T_days=2
 
     return mainshock_df
 
-if "TF_iet" in mainshock_df_old.columns:
+#if "TF_iet" in mainshock_df_old.columns:
+if 1 == 2:
     print("already calculated, skip")
 else:
     nearby_event_dfs_old = find_nearby_events(df_old, mainshock_df_old, distance_threshold_km=10.0, day_threshold=380)
@@ -181,7 +182,7 @@ else:
     mainshock_df_new.to_csv(f"mainshock_df_new.csv", index=False)
 
 # foeeshock occurrence rate
-print("oreshock occurrence rate : ")
+print("foreshock occurrence rate : ")
 
 def occurrence_rate():
     df_old = pd.read_csv("mainshock_df_old.csv")
