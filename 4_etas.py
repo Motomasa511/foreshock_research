@@ -1,13 +1,4 @@
-# for 本震:
-    # 本震周りの全期間の地震をdf_nearbyに
-    # work.etasとetas.openを作る
-    # パラメータフィット(etas.f)しmainshock_dfに追加
-    # 20daysでのetasでの地震数を求め、Nobsがポアソン分布のxx%にあるxxを求める
-    # xx <0.01 で T or F
-
-# df_nearby_list を保存
-# rate を求める
-
+# before running this
 # f2py -c -m etas_module etas_forpy.f
 
 
@@ -19,6 +10,7 @@ from tqdm import tqdm
 import pickle
 import csv
 from scipy.stats import poisson
+from numba import njit
 import etas_module
 
 mainshock_df_old = pd.read_csv(f'mainshock_df_old.csv', parse_dates=["datetime"])
@@ -146,6 +138,23 @@ def remake_etas_open(flag, Mc, x):
         f.write(f"{Mc:.1f}       {Mc:.1f}\n")
         f.write(f"{mu: .5E} {K: .5E} {c: .5E} {alpha: .5E} {p: .5E}\n")
 
+def make_etas_open_fixp(flag, Mc):
+
+    if flag == "old":
+        start = datetime(1998, 1, 1)
+        end   = datetime(2016, 3, 31)
+    elif flag == "new":
+        start = datetime(2016, 4, 1)
+        end   = datetime(2023, 12, 31)
+
+    x_days = (end - start).days
+
+    with open("4_etas/etas.open", "w") as f:
+        f.write("4         2\n")
+        f.write(f"0.0       {x_days:.2f}     30.0\n")
+        f.write(f"{Mc:.1f}       {Mc:.1f}\n")
+        f.write("0.0100E+00 0.0010E+00 0.30000E-01 0.12000E+01 0.1000E+01\n") # initial values
+
 def run_with_log(index, logfile="4_etas/etas.log"):
     log = open(logfile, "a")
 
@@ -178,14 +187,13 @@ def run_etas(mainshock_df, flag):
 
         mainshock = mainshock_df.iloc[i]
         df = read_nearby_events(i, flag)
+        make_work_etas(df, t0)
         if len(df) < 100:
             print("event number =", len(df))
             x = [np.nan, np.nan, np.nan, np.nan, np.nan]
-            print("skip")
         else:
             print("event number =", len(df))
 
-            make_work_etas(df, t0)
             make_etas_open(flag, Mc)
 
             x, g, f, aic = run_with_log(i)
@@ -197,6 +205,29 @@ def run_etas(mainshock_df, flag):
 
             k = 0
             while (np.linalg.norm(g) > 1e-4) and (k<10):
+                print("!!! not converge")
+                remake_etas_open(flag, Mc, x)
+                x, g, f, aic = run_with_log(i)
+                print("event number =", len(df))
+                print("mu, K, c, alpha, p =", x)
+                print("gradient", g)
+                print("log-likelihood =", f)
+                print("AIC =", aic)
+                k += 1
+            if k == 10:
+                x = [np.nan, np.nan, np.nan, np.nan, np.nan]
+
+        if np.isnan(x[0]):
+            print("p=1 fixed")
+            make_etas_open_fixp(flag, Mc)
+            x, g, f, aic = run_with_log(i)
+            print("mu, K, c, alpha, p =", x)
+            print("gradient", g)
+            print("log-likelihood =", f)
+            print("AIC =", aic)
+
+            k = 0
+            while (np.linalg.norm(g) > 1e-4) and (k<20):
                 print("!!! not converge")
                 remake_etas_open(flag, Mc, x)
                 x, g, f, aic = run_with_log(i)
@@ -223,6 +254,79 @@ def run_etas(mainshock_df, flag):
     return mainshock_df
 
 
+@njit
+def compute_tau_numba(times_days, mags, mu, K, c, alpha, p, Mc):
+    n = len(times_days)
+    tau_vals = np.zeros(n)
+
+    for i in range(n):
+        tau = mu * times_days[i]
+
+        for j in range(i+1):
+            dt = times_days[i] - times_days[j]
+            A = K * np.exp(alpha * (mags[j] - Mc))
+
+            if p != 1.0:
+                tau += A/(1.0-p) * ((dt + c)**(1.0-p) - c**(1.0-p))
+            else:
+                tau += A * np.log((dt + c)/c)
+
+        tau_vals[i] = tau
+
+    return tau_vals
+
+def compute_tau_for_df(df, mu, K, c, alpha, p, Mc, t_start):
+
+    times = df["datetime"].to_numpy(dtype="datetime64[ns]")
+    mags  = df["magnitude"].to_numpy(np.float64)
+
+    times_days = (times - t_start) / np.timedelta64(1, "D")
+    times_days = times_days.astype(np.float64)
+
+    tau = compute_tau_numba(times_days, mags, mu, K, c, alpha, p, Mc)
+    N   = np.arange(1, len(df)+1)
+
+    return tau, N
+
+def save_tau_numba(mainshock_df, flag=""):
+
+    with open(f"4_etas/nearby_list4_{flag}.pkl", "rb") as f:
+        nearby_event_dfs = pickle.load(f)
+
+
+    if flag == "old":
+        Mc = 0.8
+        t_start = np.datetime64('1998-01-01')
+    else:
+        Mc = 0.5
+        t_start = np.datetime64('2016-04-01')
+
+    for i in tqdm(range(len(nearby_event_dfs)), desc="computing tau"):
+
+        df = nearby_event_dfs[i].sort_values("datetime").copy()
+        row = mainshock_df.iloc[i]
+
+        tau, N = compute_tau_for_df(
+            df,
+            row["etas_mu"],
+            row["etas_K"],
+            row["etas_c"],
+            row["etas_alpha"],
+            row["etas_p"],
+            Mc,
+            t_start
+        )
+
+        df["tau"] = tau
+        df["N"]   = N
+
+        nearby_event_dfs[i] = df
+
+    with open(f"4_etas/nearby_list4_{flag}.pkl", "wb") as f:
+        pickle.dump(nearby_event_dfs, f)
+
+
+
 #if os.path.exists("4_etas/etas_results.csv"):
 if 1 == 2:
     print('skip eastimaintg etas parameter')
@@ -232,7 +336,12 @@ else:
         writer.writerow(["run", "event_num", "mu", "K", "c", "alpha", "p"])
     mainshock_df_old = run_etas(mainshock_df_old, flag="old")
     mainshock_df_new = run_etas(mainshock_df_new, flag="new")
+    mainshock_df_old.to_csv(f"mainshock_df_old.csv", index=False)
+    mainshock_df_new.to_csv(f"mainshock_df_new.csv", index=False)
     print("running etas done")
+    save_tau_numba(mainshock_df_old, flag="old")
+    save_tau_numba(mainshock_df_new, flag="new")
+    print("calculating tau done")
 
 
 def integrate_lambda(mainshock_row, df_nearby, Mc, T=20):
@@ -290,7 +399,7 @@ def etas_foreshock_TF(mainshock_df, flag=""):
             foreshock_list.append(np.nan)
         else:
             Nobs = mainshock_df.loc[i, "TF_stw count"]
-            p_value = 1 - poisson.cdf(Nobs, tau_20days)
+            p_value = 1 - poisson.cdf(Nobs-1, tau_20days)
             p_value_list.append(p_value)
             foreshock_list.append(p_value<0.01)
 
