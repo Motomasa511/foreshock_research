@@ -327,8 +327,8 @@ def save_tau_numba(mainshock_df, flag=""):
 
 
 
-#if os.path.exists("4_etas/etas_results.csv"):
-if 1 == 2:
+if os.path.exists("4_etas/etas_results.csv"):
+#if 1 == 2:
     print('skip eastimaintg etas parameter')
 else:
     with open("4_etas/etas_results.csv", "w", newline="") as f:

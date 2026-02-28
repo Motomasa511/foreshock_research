@@ -2,6 +2,7 @@ import pandas as pd
 import subprocess
 from pathlib import Path
 import numpy as np
+import geopandas as gpd
 
 def velocity_assign(df, work_dir="."):
 
@@ -86,6 +87,30 @@ def assign_stress_Aphi(df, max_deg_diff=0.2):
 
 mainshock_df_old = assign_stress_Aphi(mainshock_df_old)
 mainshock_df_new = assign_stress_Aphi(mainshock_df_new)
+
+def assign_polygon_value(foreshock_df):
+    gdf_temp = gpd.read_file("GSJ_DB_GRES-DB_ONSEN_2020_Temperature-polygon/Temperature-polygon.shp")
+
+    gdf_points = gpd.GeoDataFrame(
+        foreshock_df.copy(),
+        geometry=gpd.points_from_xy(foreshock_df["longitude"], foreshock_df["latitude"]),
+        crs="EPSG:4326" 
+    )
+
+    gdf_polygons = gpd.GeoDataFrame(
+        gdf_temp.copy(),
+        geometry=gdf_temp["geometry"]
+    ).set_crs("EPSG:4326", allow_override=True)
+
+    joined = gpd.sjoin(gdf_points, gdf_polygons[["PolygonVal", "geometry"]], how="left", predicate="within")
+
+    result = foreshock_df.copy()
+    result["onsen_heat"] = joined["PolygonVal"].values
+
+    return result
+
+mainshock_df_old = assign_polygon_value(mainshock_df_old)
+mainshock_df_new = assign_polygon_value(mainshock_df_new)
 
 
 mainshock_df_old.to_csv(f"mainshock_df_old.csv", index=False)
